@@ -1,0 +1,92 @@
+
+
+CREATE TABLE IF NOT EXISTS ev_cars (
+    vehicle_id INTEGER PRIMARY KEY,
+    brand VARCHAR(80),
+    model VARCHAR(100),
+    model_year INTEGER,
+    price_usd NUMERIC(12,2),
+    range_km INTEGER,
+    battery_capacity_kwh NUMERIC(8,1),
+    charging_time_hr NUMERIC(6,1),
+    top_speed_kmph INTEGER,
+    seats INTEGER,
+    body_type VARCHAR(40),
+    country VARCHAR(80),
+    units_sold_est INTEGER,
+    estimated_revenue_usd NUMERIC(16,2)
+);
+
+-- Import the CSV using pgAdmin: right-click ev_cars > Import/Export Data > Import.
+-- Select CSV, Header = Yes, delimiter = comma, and map columns by name.
+
+-- 1. Check rows and data quality
+SELECT COUNT(*) AS row_count FROM ev_cars;
+SELECT * FROM ev_cars LIMIT 10;
+SELECT
+  COUNT(*) FILTER (WHERE brand IS NULL) AS missing_brand,
+  COUNT(*) FILTER (WHERE price_usd IS NULL) AS missing_price,
+  COUNT(*) FILTER (WHERE range_km IS NULL) AS missing_range
+FROM ev_cars;
+
+-- 2. Summary KPIs
+SELECT
+  COUNT(*) AS vehicle_records,
+  COUNT(DISTINCT brand) AS brands,
+  ROUND(AVG(price_usd), 2) AS average_price_usd,
+  ROUND(AVG(range_km), 1) AS average_range_km,
+  ROUND(AVG(battery_capacity_kwh), 1) AS average_battery_kwh,
+  SUM(units_sold_est) AS estimated_units_sold,
+  SUM(estimated_revenue_usd) AS estimated_revenue_usd
+FROM ev_cars;
+
+-- 3. Brand performance
+SELECT brand, COUNT(*) AS model_records,
+       ROUND(AVG(price_usd), 2) AS avg_price_usd,
+       ROUND(AVG(range_km), 1) AS avg_range_km,
+       SUM(units_sold_est) AS estimated_units_sold,
+       SUM(estimated_revenue_usd) AS estimated_revenue_usd
+FROM ev_cars
+GROUP BY brand
+ORDER BY estimated_revenue_usd DESC;
+
+-- 4. Best range models
+SELECT brand, model, model_year, range_km, battery_capacity_kwh, price_usd
+FROM ev_cars
+ORDER BY range_km DESC
+LIMIT 10;
+
+-- 5. Body type mix
+SELECT body_type, COUNT(*) AS records,
+       ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) AS pct_of_records
+FROM ev_cars
+GROUP BY body_type
+ORDER BY records DESC;
+
+-- 6. Year trend
+SELECT model_year, COUNT(*) AS records,
+       ROUND(AVG(price_usd), 2) AS avg_price_usd,
+       ROUND(AVG(range_km), 1) AS avg_range_km,
+       ROUND(AVG(battery_capacity_kwh), 1) AS avg_battery_kwh
+FROM ev_cars
+GROUP BY model_year
+ORDER BY model_year;
+
+-- 7. Price segments
+SELECT CASE
+         WHEN price_usd < 25000 THEN 'Budget (<$25K)'
+         WHEN price_usd < 50000 THEN 'Mid-range ($25K-$50K)'
+         ELSE 'Premium (>$50K)'
+       END AS price_segment,
+       COUNT(*) AS vehicle_records,
+       ROUND(AVG(range_km), 1) AS avg_range_km
+FROM ev_cars
+GROUP BY price_segment
+ORDER BY vehicle_records DESC;
+
+-- 8. Range per battery kWh (efficiency proxy, not official efficiency)
+SELECT brand, model, range_km, battery_capacity_kwh,
+       ROUND(range_km::NUMERIC / NULLIF(battery_capacity_kwh,0), 2) AS km_per_kwh_proxy
+FROM ev_cars
+ORDER BY km_per_kwh_proxy DESC
+LIMIT 15;
